@@ -1,0 +1,57 @@
+name: CI
+on:
+  push:
+    branches: [ extension ]
+  pull_request:
+    branches: [ main, extension ]
+env:
+  app_name: hello_world
+
+jobs:
+  Build:
+    strategy:
+      matrix:
+        runner: [ubuntu-latest, windows-latest]
+  
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Building C++ Application
+        run: g++ hello_world.cpp -o ${{ env.app_name }}_${{ runner.os }}_v${{ github.run_number }}.exe
+      
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: artifact
+          path: ${{ env.app_name }}_${{ runner.os }}_v${{ github.run_number }}.exe
+          
+  Notification:
+    if: always()
+    needs: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Download artifacts
+        if: success()
+        uses: actions/download-artifact@v3
+        with:
+          name: artifact
+          path: all_artifacts
+          
+      - name: Send to Telegram
+        if: success()
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          message: Message from ${{ github.repository }}!
+          document: all_artifacts/**
+          
+      - name: Send failure notification to Telegram
+        if: failure()
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          message: Last run was failed!
